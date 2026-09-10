@@ -1,0 +1,177 @@
+# ==============================================================================
+# KubeMind - Live Kubernetes Cluster Mind-Map Monitor
+# Kubernetes Deployment Manifests for k3s with Traefik & Flannel
+# ==============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cluster-monitor
+  labels:
+    app.kubernetes.io/name: cluster-monitor
+    app.kubernetes.io/part-of: cluster-monitor
+
+---
+# Dedicated ServiceAccount for in-cluster Kubernetes API access
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-monitor-sa
+  namespace: cluster-monitor
+  labels:
+    app.kubernetes.io/name: cluster-monitor
+
+---
+# Read-Only ClusterRole: get, list, watch nodes, pods, services, endpoints, namespaces, and metrics
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-monitor-role
+  labels:
+    app.kubernetes.io/name: cluster-monitor
+rules:
+  # Core Kubernetes resources for mind-map topology
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - pods
+      - services
+      - endpoints
+      - namespaces
+    verbs: ["get", "list", "watch"]
+
+  # Optional metrics-server access if available
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - nodes
+      - pods
+    verbs: ["get", "list"]
+
+---
+# Bind the read-only ClusterRole to the ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-monitor-rolebinding
+  labels:
+    app.kubernetes.io/name: cluster-monitor
+subjects:
+  - kind: ServiceAccount
+    name: cluster-monitor-sa
+    namespace: cluster-monitor
+roleRef:
+  kind: ClusterRole
+  name: cluster-monitor-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Deployment: single replica, light footprint (~50m/100Mi request)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-monitor
+  namespace: cluster-monitor
+  labels:
+    app: cluster-monitor
+    app.kubernetes.io/name: cluster-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cluster-monitor
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: cluster-monitor
+        app.kubernetes.io/name: cluster-monitor
+    spec:
+      serviceAccountName: cluster-monitor-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: cluster-monitor
+          image: cluster-monitor:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              cpu: 200m
+              memory: 300Mi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+
+---
+# ClusterIP Service exposing port 80 -> container port 3000
+apiVersion: v1
+kind: Service
+metadata:
+  name: cluster-monitor-svc
+  namespace: cluster-monitor
+  labels:
+    app: cluster-monitor
+    app.kubernetes.io/name: cluster-monitor
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app: cluster-monitor
+
+---
+# Traefik Ingress: no fixed host so it responds on any hostname / Tailscale IP (e.g., 100.82.72.81)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cluster-monitor-ingress
+  namespace: cluster-monitor
+  labels:
+    app: cluster-monitor
+    app.kubernetes.io/name: cluster-monitor
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    # Notice: No host field defined, matching any incoming IP/host (Tailscale, internal DNS, etc.)
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: cluster-monitor-svc
+                port:
+                  number: 80

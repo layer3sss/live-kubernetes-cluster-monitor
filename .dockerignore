@@ -1,0 +1,21 @@
+# Dependencies & build output
+node_modules/
+dist/
+build/
+coverage/
+
+# Git & local state
+.git/
+.gitignore
+
+# Environment / secrets
+.env*
+
+# Logs & OS files
+*.log
+.DS_Store
+
+# Not needed inside the image
+deploy/
+README.md
+metadata.json

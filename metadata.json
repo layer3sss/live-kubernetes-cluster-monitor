@@ -1,0 +1,6 @@
+{
+  "name": "KubeMind - Live Kubernetes Cluster Monitor",
+  "description": "Real-time animated mind-map and topology node graph for Kubernetes and k3s clusters, visualizing nodes, pods, containers, and service traffic relationships.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
