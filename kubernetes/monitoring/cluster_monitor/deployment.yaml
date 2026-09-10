@@ -16,7 +16,7 @@ spec:
       serviceAccountName: cluster-monitor-sa
       containers:
         - name: monitor
-          image:image: ghcr.io/mauricevanlavieren-lab/live-kubernetes-cluster-monitor:latest
+          image: ghcr.io/mauricevanlavieren-lab/live-kubernetes-cluster-monitor:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000 # Pas aan op de poort die jouw app gebruikt
