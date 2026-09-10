@@ -35,6 +35,8 @@ jobs:
   deploy:
     needs: build
     runs-on: self-hosted
+    env:
+      KUBECONFIG: /home/mau/.kube/config
     steps:
       - uses: actions/checkout@v4
 
